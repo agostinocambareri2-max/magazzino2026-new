@@ -1000,10 +1000,90 @@
   background-image:url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%0A%20%20%3Ccircle%20cx%3D%2712%27%20cy%3D%2712%27%20r%3D%2711%27%20fill%3D%27%23E53935%27%2F%3E%0A%20%20%3Ccircle%20cx%3D%2716.2%27%20cy%3D%277.3%27%20r%3D%273.4%27%20fill%3D%27%23FF6F60%27%20opacity%3D%270.55%27%2F%3E%0A%20%20%3Cpath%20d%3D%27M15%205l4%204%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%2F%3E%0A%20%20%3Cpath%20d%3D%27M5.5%2014.5l7.2-7.2%204.8%204.8-7.2%207.2H5.5v-4.8z%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linejoin%3D%27round%27%2F%3E%0A%20%20%3Cpath%20d%3D%27M9.1%2010.9l4%204%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20opacity%3D%270.9%27%2F%3E%0A%20%20%3Cpath%20d%3D%27M7.2%2018.8l-2%202%27%20stroke%3D%27%23ffffff%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%2F%3E%0A%3C%2Fsvg%3E');
 }
 
+
+/* ===== CLOUD SYNC (Google Apps Script + Sheets) ===== */
+.header .cloud-sync-btn{
+  border:1px solid #c7d3e0;
+  background:#ffffff;
+  border-radius:10px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-weight:900;
+  font-size:12px;
+  margin-left:6px;
+}
+.header .cloud-sync-btn:hover{ background:#f6f9ff; }
+.cloud-indicator{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-left:6px;
+  font-size:11px;
+  font-weight:900;
+  color:#2f3a45;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid #dfe7f1;
+  background:#fff;
+}
+.cloud-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:#9aa7b3;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.06);
+}
+.cloud-indicator.ok .cloud-dot{ background:#2e7d32; }
+.cloud-indicator.warn .cloud-dot{ background:#f9a825; }
+.cloud-indicator.err .cloud-dot{ background:#c62828; }
+
+.modal-cloud-overlay{
+  position:fixed; inset:0;
+  background: rgba(0,0,0,.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index: 9999;
+}
+.modal-cloud{
+  width:min(620px, 92vw);
+  background:#fff;
+  border-radius:16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  overflow:hidden;
+  border:1px solid #e9eef6;
+}
+.modal-cloud .mc-head{
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background: linear-gradient(90deg, #eef6ff, #ffffff);
+  border-bottom:1px solid #e9eef6;
+}
+.modal-cloud .mc-title{ font-weight:900; color:#004e92; }
+.modal-cloud .mc-body{ padding:14px 16px; }
+.modal-cloud label{ display:block; font-weight:800; font-size:12px; margin:10px 0 4px; color:#333; }
+.modal-cloud input, .modal-cloud textarea{
+  width:100%;
+  padding:10px;
+  border:1px solid #dfe7f1;
+  border-radius:10px;
+  box-sizing:border-box;
+  font-size:12px;
+}
+.modal-cloud .mc-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.modal-cloud .mc-actions{ display:flex; gap:10px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #e9eef6; background:#fafcff; }
+.modal-cloud .mc-note{ font-size:12px; color:#556; line-height:1.35; }
+.modal-cloud .mc-small{ font-size:11px; color:#666; margin-top:6px; }
+
 </style>
 </head>
 
-<body class="app-preload">
+<body>
+<script>
+  // Fail-safe: never keep the UI hidden (preload)
+  try { document.body.classList.remove('app-preload'); } catch(e) {}
+</script>
 
 <div id="toast">Operazione completata!</div>
 <div class="header no-print">
@@ -1017,6 +1097,11 @@
     <div class="lab-switcher no-print">
         <select id="labSelect" title="Seleziona laboratorio/centro"></select>
         <button id="btnGestioneCentri" onclick="apriModalGestioneCentri()" title="Gestione centri">⚙️</button>
+        <button id="btnCloudSync" class="cloud-sync-btn" onclick="apriModalCloud()" title="Sincronizzazione Google Sheets">☁️ Sync</button>
+        <div id="cloudIndicator" class="cloud-indicator" title="Stato sincronizzazione">
+          <span class="cloud-dot"></span><span id="cloudIndicatorText">Cloud: OFF</span>
+        </div>
+
         <div id="accessBadge" class="access-badge" title="Cambia accesso" onclick="mostraAccesso(true)"></div>
         <button id="btnChangePass" onclick="apriModalCambiaPassword()" title="Cambia password" style="display:none;">🔑 Password</button>
         <button id="btnLogout" onclick="esciApp()" title="Esci (logout)">🚪 Esci</button>
@@ -1886,6 +1971,372 @@ let listaForzati = new Set();
     const STRUTTURA_ORDINE_CFG_KEY = 'magazzino_struttura_ordine_cfg_chc';
     const ORDINI_REGISTRATI_KEY = 'magazzino_ordini_registrati_chc';
 
+    // ==================== CLOUD SYNC (Google Apps Script) ====================
+    const CLOUD_CFG_KEY = 'magazzino_cloud_cfg_v1';
+    const CLOUD_META_KEY = 'magazzino_cloud_meta_v1'; // meta globale (last push/pull)
+    const GAS_WEBAPP_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
+
+    let cloudCfg = null;
+    let cloudDeviceId = null;
+    let cloudSuppressHooks = false;
+    let cloudDirty = false;
+    let cloudPushTimer = null;
+
+    function cloudNowISO(){ try{ return new Date().toISOString(); }catch(e){ return '' } }
+
+    function cloudLoadCfg(){
+        try {
+            const raw = localStorage.getItem(CLOUD_CFG_KEY);
+            const obj = raw ? (JSON.parse(raw)||null) : null;
+            cloudCfg = Object.assign({ enabled:true, url:GAS_WEBAPP_URL_DEFAULT, token:'', autoPullOnStart:true, autoPush:true }, obj||{});
+        } catch(e) {
+            cloudCfg = { enabled:true, url:GAS_WEBAPP_URL_DEFAULT, token:'', autoPullOnStart:true, autoPush:true };
+        }
+        if (!cloudCfg.url) cloudCfg.url = GAS_WEBAPP_URL_DEFAULT;
+        // FORZA sincronizzazione automatica (richiesta): sempre attiva, auto-pull e auto-push
+        try {
+            cloudCfg.enabled = true;
+            cloudCfg.autoPullOnStart = true;
+            cloudCfg.autoPush = true;
+            // se la URL salvata è vuota o era quella vecchia, usa la default aggiornata
+            if (!cloudCfg.url || cloudCfg.url === 'https://script.google.com/macros/s/AKfycbwZQWK3JKEX9V8UNbAqPuAUawkvt2oUAVSFWa00aFmVVnnPTEwzMM_l8rpObiFZ0Vyg/exec') cloudCfg.url = GAS_WEBAPP_URL_DEFAULT;
+        } catch(e) {}
+        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg||{})); cloudSuppressHooks = false; } catch(e) { try{ cloudSuppressHooks = false; }catch(_){} }
+        // device id (per debug/conflitti)
+        try {
+            const k='magazzino_cloud_device_id_v1';
+            cloudDeviceId = localStorage.getItem(k);
+            if (!cloudDeviceId) {
+                cloudDeviceId = 'dev_' + Math.random().toString(16).slice(2) + '_' + Date.now().toString(16);
+                localStorage.setItem(k, cloudDeviceId);
+            }
+        } catch(e) {
+            cloudDeviceId = 'dev_' + Date.now();
+        }
+    }
+
+    function cloudSaveCfg(){
+        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg||{})); cloudSuppressHooks = false; } catch(e) { try{ cloudSuppressHooks = false; }catch(_){} }
+        cloudUpdateIndicator();
+    }
+
+    function cloudSetInfo(html){
+        const box = document.getElementById('cloudInfo');
+        if (box) box.innerHTML = html || '';
+    }
+
+    function cloudUpdateIndicator(state, text){
+        const el = document.getElementById('cloudIndicator');
+        const tx = document.getElementById('cloudIndicatorText');
+        if (!el || !tx) return;
+        el.classList.remove('ok','warn','err');
+        if (!cloudCfg || !cloudCfg.enabled) {
+            tx.textContent = 'Cloud: OFF';
+            return;
+        }
+        if (state) el.classList.add(state);
+        tx.textContent = text || 'Cloud: ON';
+    }
+
+    function cloudInterestingKey(k){
+        if (!k) return false;
+        // escludi chiavi interne della sync (evita loop)
+        if (k === CLOUD_META_KEY) return false;
+        if (k === CLOUD_CFG_KEY) return false;
+        // includi tutte le chiavi dell’app, escluse sessioni volatili
+        if (k === ACCESS_SESSION_KEY) return false;
+        if (typeof ADMIN_UNLOCK_KEY !== 'undefined' && k === ADMIN_UNLOCK_KEY) return false;
+        if (k.startsWith('magazzino_')) return true;
+        if (k.startsWith('contatoreOrdine_')) return true;
+        if (k.startsWith('tipiProdotti')) return true;
+        if (k.startsWith('chc_access_')) return (k === ACCESS_USERS_KEY || k === ACCESS_KIND_KEY);
+        return false;
+    }
+
+    function cloudHookLocalStorage(){
+        try {
+            const _set = localStorage.setItem.bind(localStorage);
+            const _rem = localStorage.removeItem.bind(localStorage);
+            localStorage.setItem = function(k,v){
+                _set(k,v);
+                try {
+                    if (!cloudSuppressHooks && cloudCfg && cloudCfg.enabled && cloudInterestingKey(k)) cloudOnLocalChange();
+                } catch(e){}
+            };
+            localStorage.removeItem = function(k){
+                _rem(k);
+                try {
+                    if (!cloudSuppressHooks && cloudCfg && cloudCfg.enabled && cloudInterestingKey(k)) cloudOnLocalChange();
+                } catch(e){}
+            };
+        } catch(e){}
+    }
+
+    function cloudOnLocalChange(){
+        cloudDirty = true;
+        if (!cloudCfg || !cloudCfg.enabled || !cloudCfg.autoPush) {
+            cloudUpdateIndicator('warn','Cloud: modifiche locali');
+            return;
+        }
+        cloudUpdateIndicator('warn','Cloud: in attesa…');
+        if (cloudPushTimer) clearTimeout(cloudPushTimer);
+        cloudPushTimer = setTimeout(()=>{ cloudCarica(true); }, 1800);
+    }
+
+    function cloudBuildGlobalState(){
+        const state = {};
+        try { state[LABS_KEY] = JSON.parse(localStorage.getItem(LABS_KEY) || '[]'); } catch(e){ state[LABS_KEY]=[]; }
+        try { state[ACCESS_USERS_KEY] = JSON.parse(localStorage.getItem(ACCESS_USERS_KEY) || '{}'); } catch(e){ state[ACCESS_USERS_KEY]={}; }
+        try { state[ACCESS_KIND_KEY] = localStorage.getItem(ACCESS_KIND_KEY) || 'LAB'; } catch(e){}
+        try { state[CURRENT_LAB_KEY] = localStorage.getItem(CURRENT_LAB_KEY) || ''; } catch(e){}
+        return state;
+    }
+
+    function cloudBuildLabState(labId){
+        const baseKeys = [
+            STORAGE_KEY,
+            FORZATI_KEY,
+            REPARTI_KEY,
+            ORDINE_REPARTO_KEY,
+            SOTTOCLASSI_KEY,
+            CONFIG_REPARTI_KEY,
+            SUPPLIER_PROFILES_KEY,
+            SUPPLIER_PROFILES_GLOBAL_KEY,
+            STRUTTURA_ORDINE_CFG_KEY,
+            ORDINI_REGISTRATI_KEY,
+            'tipiProdotti'
+        ];
+        const out = { __labId: labId, __capturedAt: cloudNowISO(), __deviceId: cloudDeviceId, keys: {} };
+        // copia chiavi lab-specific
+        baseKeys.forEach(k => {
+            try {
+                const kk = `${k}__${labId}`;
+                const v = localStorage.getItem(kk);
+                if (v != null) out.keys[kk] = v;
+            } catch(e){}
+        });
+        // contatori ordine per anno (lab-specific)
+        try {
+            for (let i=0;i<localStorage.length;i++) {
+                const k = localStorage.key(i);
+                if (!k) continue;
+                if (!k.startsWith('contatoreOrdine_')) continue;
+                const kk = `${k}__${labId}`;
+                const v = localStorage.getItem(kk);
+                if (v != null) out.keys[kk] = v;
+            }
+        } catch(e){}
+        return out;
+    }
+
+    function cloudApplyStateKeys(map){
+        if (!map) return;
+        cloudSuppressHooks = true;
+        try {
+            Object.keys(map).forEach(k => {
+                try {
+                    const v = map[k];
+                    if (v === null || v === undefined) localStorage.removeItem(k);
+                    else localStorage.setItem(k, v);
+                } catch(e){}
+            });
+        } finally {
+            cloudSuppressHooks = false;
+        }
+    }
+
+    async function cloudFetchJson(url, opts){
+        const res = await fetch(url, opts||{});
+        const txt = await res.text();
+        try { return JSON.parse(txt); } catch(e) { return { ok:false, error:'Risposta non JSON', raw: txt }; }
+    }
+
+    function cloudUrlBase(){
+        const u = (cloudCfg && cloudCfg.url) ? cloudCfg.url : GAS_WEBAPP_URL_DEFAULT;
+        return (u||'').trim();
+    }
+
+    async function cloudCallGet(params){
+        const base = cloudUrlBase();
+        if (!base) return { ok:false, error:'URL mancante' };
+        const qs = new URLSearchParams(params||{}).toString();
+        const url = qs ? `${base}?${qs}` : base;
+        return await cloudFetchJson(url, { method:'GET', cache:'no-store' });
+    }
+
+    async function cloudCallPost(payload){
+        const base = cloudUrlBase();
+        if (!base) return { ok:false, error:'URL mancante' };
+        // POST come testo per evitare preflight CORS
+        return await cloudFetchJson(base, {
+            method:'POST',
+            body: JSON.stringify(payload||{}),
+            cache:'no-store'
+        });
+    }
+
+    async function cloudPing(){
+        cloudLoadCfg();
+        cloudUpdateIndicator('warn','Cloud: test…');
+        try {
+            const r = await cloudCallGet({ action:'ping', token: (cloudCfg.token||'') });
+            if (r && r.ok) {
+                cloudUpdateIndicator('ok','Cloud: OK');
+                cloudSetInfo(`<b>Connessione OK</b><br>Server time: ${escapeHtml(String(r.time||''))}`);
+            } else {
+                cloudUpdateIndicator('err','Cloud: errore');
+                cloudSetInfo(`<b>Errore</b>: ${escapeHtml(String((r&&r.error)||'ping fallito'))}`);
+            }
+        } catch(e) {
+            cloudUpdateIndicator('err','Cloud: errore');
+            cloudSetInfo(`<b>Errore</b>: ${escapeHtml(String(e&&e.message||e))}`);
+        }
+    }
+
+    async function cloudScarica(){ await cloudPullAll(false); }
+    async function cloudCarica(silent=false){ await cloudPushAll(!!silent); }
+
+    async function cloudPullAll(silent){
+        cloudLoadCfg();
+        if (!cloudCfg.enabled) { if (!silent) alert('Sincronizzazione disattivata.'); return; }
+        const labId = currentLabId || '';
+        if (!labId) { if (!silent) alert('Nessuna struttura selezionata.'); return; }
+
+        cloudUpdateIndicator('warn','Cloud: scarico…');
+        cloudSetInfo('Scaricamento dati in corso…');
+
+        try {
+            // 1) global
+            const g = await cloudCallGet({ action:'get', scope:'global', token:(cloudCfg.token||'') });
+            if (g && g.ok && g.record && g.record.json) {
+                try {
+                    const parsed = (typeof g.record.json === 'string') ? JSON.parse(g.record.json) : g.record.json;
+                    const map = {};
+                    if (parsed && parsed[LABS_KEY] !== undefined) map[LABS_KEY] = JSON.stringify(parsed[LABS_KEY]);
+                    if (parsed && parsed[ACCESS_USERS_KEY] !== undefined) map[ACCESS_USERS_KEY] = JSON.stringify(parsed[ACCESS_USERS_KEY]);
+                    if (parsed && parsed[ACCESS_KIND_KEY] !== undefined) map[ACCESS_KIND_KEY] = String(parsed[ACCESS_KIND_KEY]||'LAB');
+                    if (parsed && parsed[CURRENT_LAB_KEY] !== undefined) map[CURRENT_LAB_KEY] = String(parsed[CURRENT_LAB_KEY]||'');
+                    cloudApplyStateKeys(map);
+                } catch(e){}
+            }
+
+            // 2) lab
+            const r = await cloudCallGet({ action:'get', scope:'lab', labId: labId, token:(cloudCfg.token||'') });
+            if (r && r.ok && r.record && r.record.json) {
+                const parsed = (typeof r.record.json === 'string') ? JSON.parse(r.record.json) : r.record.json;
+                if (parsed && parsed.keys) cloudApplyStateKeys(parsed.keys);
+            }
+
+            // ricarica in memoria e UI
+            try { caricaLabs && caricaLabs(); } catch(e){}
+            try { ensureKindOnLabs && ensureKindOnLabs(); } catch(e){}
+            try { aggiornaSelectCentriUI && aggiornaSelectCentriUI(); } catch(e){}
+            try { setupHeaderLabSelect && setupHeaderLabSelect(); } catch(e){}
+
+            // ricarica dati del centro + re-render
+            try { caricaDati && caricaDati(); } catch(e){}
+            try { caricaReparti && caricaReparti(); } catch(e){}
+            try { caricaSottoclassi && caricaSottoclassi(); } catch(e){}
+            try { caricaForzati && caricaForzati(); } catch(e){}
+            try { caricaOrdini && caricaOrdini(); } catch(e){}
+            try { caricaConfigurazioneReparti && caricaConfigurazioneReparti(); } catch(e){}
+            try { caricaOrdiniRegistrati && caricaOrdiniRegistrati(); } catch(e){}
+            try { caricaTipiProdotti && caricaTipiProdotti(); } catch(e){}
+            try { renderTipoNav && renderTipoNav(); } catch(e){}
+            try { aggiornaTipoSelect && aggiornaTipoSelect(); } catch(e){}
+            try { renderizza && renderizza(); } catch(e){}
+            try { renderizzaReparti && renderizzaReparti(); } catch(e){}
+            try { aggiornaSelectReparti && aggiornaSelectReparti(); } catch(e){}
+            try { aggiornaSottoclassiSelect && aggiornaSottoclassiSelect(); } catch(e){}
+            try { aggiornaInterfacciaSottoclassi && aggiornaInterfacciaSottoclassi(); } catch(e){}
+
+            cloudDirty = false;
+            cloudUpdateIndicator('ok','Cloud: sincronizzato');
+            cloudSetInfo(`<b>OK</b> — Dati scaricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
+            try { cloudSuppressHooks = true; localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPull: cloudNowISO(), labId })); } catch(e) {} finally { cloudSuppressHooks = false; }
+        } catch(e) {
+            cloudUpdateIndicator('err','Cloud: errore');
+            cloudSetInfo(`<b>Errore scaricamento</b>: ${escapeHtml(String(e&&e.message||e))}`);
+        }
+    }
+
+    async function cloudPushAll(silent){
+        cloudLoadCfg();
+        if (!cloudCfg.enabled) { if (!silent) alert('Sincronizzazione disattivata.'); return; }
+        const labId = currentLabId || '';
+        if (!labId) { if (!silent) alert('Nessuna struttura selezionata.'); return; }
+
+        cloudUpdateIndicator('warn','Cloud: carico…');
+        if (!silent) cloudSetInfo('Caricamento dati in corso…');
+
+        try {
+            const globalState = cloudBuildGlobalState();
+            const labState = cloudBuildLabState(labId);
+
+            const g = await cloudCallPost({ action:'set', scope:'global', token:(cloudCfg.token||''), json: globalState, deviceId: cloudDeviceId, clientUpdatedAt: Date.now() });
+            if (!g || !g.ok) throw new Error((g&&g.error)||'set global fallito');
+
+            const r = await cloudCallPost({ action:'set', scope:'lab', labId: labId, token:(cloudCfg.token||''), json: labState, deviceId: cloudDeviceId, clientUpdatedAt: Date.now() });
+            if (!r || !r.ok) throw new Error((r&&r.error)||'set lab fallito');
+
+            cloudDirty = false;
+            cloudUpdateIndicator('ok','Cloud: sincronizzato');
+            if (!silent) cloudSetInfo(`<b>OK</b> — Dati caricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
+            try { cloudSuppressHooks = true; localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPush: cloudNowISO(), labId })); } catch(e) {} finally { cloudSuppressHooks = false; }
+        } catch(e) {
+            cloudUpdateIndicator('err','Cloud: errore');
+            if (!silent) cloudSetInfo(`<b>Errore caricamento</b>: ${escapeHtml(String(e&&e.message||e))}`);
+        }
+    }
+
+    // UI modal
+    window.apriModalCloud = function(){
+        try {
+            cloudLoadCfg();
+            const o = document.getElementById('modalCloud');
+            if (!o) return;
+            const en = document.getElementById('cloudEnabled');
+            const url = document.getElementById('cloudUrl');
+            const tok = document.getElementById('cloudToken');
+            if (en) en.checked = !!cloudCfg.enabled;
+            if (url) url.value = cloudUrlBase();
+            if (tok) tok.value = cloudCfg.token || '';
+            cloudSetInfo('');
+            o.style.display = 'flex';
+        } catch(e){}
+    }
+    window.chiudiModalCloud = function(){
+        const o = document.getElementById('modalCloud');
+        if (o) o.style.display = 'none';
+    }
+    window.cloudSalvaConfig = function(){
+        cloudLoadCfg();
+        const en = document.getElementById('cloudEnabled');
+        const url = document.getElementById('cloudUrl');
+        const tok = document.getElementById('cloudToken');
+        cloudCfg.enabled = !!(en && en.checked);
+        cloudCfg.url = (url ? url.value : cloudUrlBase()) || '';
+        cloudCfg.token = (tok ? tok.value : '') || '';
+        cloudSaveCfg();
+        cloudSetInfo('<b>Configurazione salvata.</b>');
+    }
+    window.cloudPing = cloudPing;
+    window.cloudScarica = cloudScarica;
+    window.cloudCarica = cloudCarica;
+
+    // Auto-init: chiamata dal DOMContentLoaded
+    function cloudInit(){
+        cloudLoadCfg();
+        cloudHookLocalStorage();
+        cloudUpdateIndicator();
+        try {
+            const o = document.getElementById('modalCloud');
+            if (o) o.addEventListener('click', (e)=>{ if (e.target === o) o.style.display='none'; });
+        } catch(e){}
+    }
+
+
+
     // ==================== MULTI-LAB (CENTRI) ====================
     const LABS_KEY = 'magazzino_labs_chc';
     const CURRENT_LAB_KEY = 'magazzino_current_lab_chc';
@@ -1909,211 +2360,6 @@ let listaForzati = new Set();
     function lsRemove(baseKey) {
         localStorage.removeItem(getLabKey(baseKey));
     }
-
-
-    // ==================== CLOUD SYNC (Google Sheets via Apps Script) ====================
-    // Obiettivo: dati condivisi NON persistenti in locale (niente localStorage per i dati del magazzino).
-    // Usiamo sessionStorage come cache temporanea e Google Sheets come sorgente unica.
-
-    const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
-    const CLOUD_SCOPE = 'lab';
-    const CLOUD_POLL_MS = 10000; // 10s
-
-    // Chiavi (baseKey) che fanno parte dei dati condivisi del magazzino
-    const CLOUD_SHARED_KEYS = new Set([
-        STORAGE_KEY,
-        FORZATI_KEY,
-        REPARTI_KEY,
-        ORDINE_REPARTO_KEY,
-        SOTTOCLASSI_KEY,
-        CONFIG_REPARTI_KEY,
-        SUPPLIER_PROFILES_KEY,
-        SUPPLIER_PROFILES_GLOBAL_KEY,
-        STRUTTURA_ORDINE_CFG_KEY,
-        ORDINI_REGISTRATI_KEY,
-        // cataloghi
-        (typeof CATALOG_KEY_LOCAL !== 'undefined' ? CATALOG_KEY_LOCAL : ''),
-        (typeof CATALOG_KEY_GLOBAL !== 'undefined' ? CATALOG_KEY_GLOBAL : '')
-    ].filter(Boolean));
-
-    const cloudState = {
-        enabled: true,
-        dirty: false,
-        pushing: false,
-        pulling: false,
-        lastRev: null,
-        pushTimer: null,
-        pollTimer: null
-    };
-
-    function cloudKeyFor(baseKey) {
-        // sessionStorage usa la stessa chiave lab-specific
-        return getLabKey(baseKey);
-    }
-
-    // Override storage per chiavi condivise: sessionStorage (non persistente) invece di localStorage
-    const _lsGet_original = lsGet;
-    const _lsSet_original = lsSet;
-    const _lsRemove_original = lsRemove;
-
-    lsGet = function(baseKey) {
-        if (CLOUD_SHARED_KEYS.has(baseKey)) {
-            return sessionStorage.getItem(cloudKeyFor(baseKey));
-        }
-        return _lsGet_original(baseKey);
-    };
-
-    lsSet = function(baseKey, value) {
-        if (CLOUD_SHARED_KEYS.has(baseKey)) {
-            sessionStorage.setItem(cloudKeyFor(baseKey), value);
-            cloudMarkDirty_();
-            return;
-        }
-        _lsSet_original(baseKey, value);
-    };
-
-    lsRemove = function(baseKey) {
-        if (CLOUD_SHARED_KEYS.has(baseKey)) {
-            sessionStorage.removeItem(cloudKeyFor(baseKey));
-            cloudMarkDirty_();
-            return;
-        }
-        _lsRemove_original(baseKey);
-    };
-
-    function cloudFetch_(action, payload) {
-        // text/plain evita preflight CORS
-        return fetch(GAS_WEBAPP_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(Object.assign({ action }, payload || {}))
-        }).then(r => r.json());
-    }
-
-    function cloudLabId_() {
-        return String(currentLabId || '').trim();
-    }
-
-    function cloudMarkDirty_() {
-        cloudState.dirty = true;
-        // debounce push
-        if (cloudState.pushTimer) clearTimeout(cloudState.pushTimer);
-        cloudState.pushTimer = setTimeout(() => cloudPush_(false), 800);
-    }
-
-    function cloudSnapshotKV_() {
-        const kv = {};
-        for (const k of CLOUD_SHARED_KEYS) {
-            const v = sessionStorage.getItem(cloudKeyFor(k));
-            if (v != null) kv[k] = v;
-        }
-        return kv;
-    }
-
-    function cloudApplyKV_(kv) {
-        // Sovrascrive cache sessionStorage con dati dal cloud
-        for (const k of CLOUD_SHARED_KEYS) {
-            const ck = cloudKeyFor(k);
-            if (kv && Object.prototype.hasOwnProperty.call(kv, k)) {
-                sessionStorage.setItem(ck, kv[k]);
-            } else {
-                sessionStorage.removeItem(ck);
-            }
-        }
-    }
-
-    function cloudRefreshUI_() {
-        // Ricarica i dati dalle funzioni esistenti e ridisegna senza duplicare prodotti test
-        try {
-            caricaDati();
-            caricaReparti();
-            caricaSottoclassi();
-            caricaForzati();
-            caricaOrdini();
-            caricaConfigurazioneReparti();
-            caricaOrdiniRegistrati();
-
-            caricaTipiProdotti();
-            renderTipoNav();
-            aggiornaTipoSelect();
-            renderizza();
-            renderizzaReparti();
-            aggiornaSelectReparti();
-            aggiornaSottoclassiSelect();
-            aggiornaInterfacciaSottoclassi();
-        } catch(e) {
-            console.warn('cloudRefreshUI error', e);
-        }
-    }
-
-    async function cloudPull_(force=false) {
-        if (!cloudState.enabled) return;
-        const labId = cloudLabId_();
-        if (!labId) return;
-        if (cloudState.pulling) return;
-        if (cloudState.dirty && !force) return; // non sovrascrivere modifiche locali non ancora pushate
-
-        cloudState.pulling = true;
-        try {
-            const res = await cloudFetch_('get', { scope: CLOUD_SCOPE, labId });
-            if (res && res.ok) {
-                const rec = res.record;
-                if (rec && rec.json) {
-                    let parsed = null;
-                    try { parsed = JSON.parse(rec.json); } catch(_) { parsed = null; }
-                    if (parsed && parsed.kv) {
-                        // se rev cambia, applica
-                        if (cloudState.lastRev == null || String(rec.rev) !== String(cloudState.lastRev)) {
-                            cloudApplyKV_(parsed.kv);
-                            cloudState.lastRev = rec.rev;
-                            cloudState.dirty = false;
-                            cloudRefreshUI_();
-                        }
-                    }
-                }
-            }
-        } catch(e) {
-            console.warn('cloudPull error', e);
-        } finally {
-            cloudState.pulling = false;
-        }
-    }
-
-    async function cloudPush_(force=false) {
-        if (!cloudState.enabled) return;
-        const labId = cloudLabId_();
-        if (!labId) return;
-        if (cloudState.pushing) return;
-        if (!cloudState.dirty && !force) return;
-
-        cloudState.pushing = true;
-        try {
-            const kv = cloudSnapshotKV_();
-            const payload = JSON.stringify({ kv, ts: new Date().toISOString() });
-            const res = await cloudFetch_('set', { scope: CLOUD_SCOPE, labId, json: payload });
-            if (res && res.ok) {
-                cloudState.dirty = false;
-            }
-        } catch(e) {
-            console.warn('cloudPush error', e);
-        } finally {
-            cloudState.pushing = false;
-        }
-    }
-
-    function cloudStart_() {
-        if (!cloudState.enabled) return;
-        // pull immediato e poi ogni 10s
-        if (cloudState.pollTimer) clearInterval(cloudState.pollTimer);
-        cloudPull_(true);
-        cloudState.pollTimer = setInterval(() => cloudPull_(false), CLOUD_POLL_MS);
-
-        // quando torni sulla scheda (telefono), pull immediato
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) cloudPull_(true);
-        });
-    }
-
 
     function caricaLabs() {
         try {
@@ -3485,49 +3731,65 @@ window.accessSalvaGestione = function(){
         setupHeaderLabSelect();
         setupCompanyLogoUploader();
 
+        // cloud sync init
+        try{ cloudInit(); }catch(e){}
+
         // mostra login al primo avvio (e quando si cambia centro)
         mostraAccesso(false);
 });
 
-    function avviaAppPerCentro() {
+    async function avviaAppPerCentro() {
         // sblocca UI dopo accesso (evita flash iniziale)
         try{ document.body.classList.remove('app-preload'); }catch(e){}
         // titolo in base alla struttura selezionata
         aggiornaTitoloMagazzino();
 
-        // Avvia cloud sync per questo centro
-        try{ cloudStart_(); }catch(e){}
-
-        // Pull dal cloud prima di renderizzare (cosi tutti vedono gli stessi dati)
-        Promise.resolve()
-          .then(() => (typeof cloudPull_ === 'function' ? cloudPull_(true) : null))
-          .catch(()=>null)
-          .finally(() => {
-            // carica dati del centro e renderizza UI
-            caricaDati();
-            caricaReparti();
-            caricaSottoclassi();
-            caricaForzati();
-            caricaOrdini();
-            caricaConfigurazioneReparti();
-            caricaOrdiniRegistrati();
-
-            caricaTipiProdotti();
-            renderTipoNav();
-            aggiornaTipoSelect();
-            renderizza();
-            renderizzaReparti();
-            aggiornaSelectReparti();
-            aggiornaSottoclassiSelect();
-            aggiornaInterfacciaSottoclassi();
-
-            // prodotti test (se previsti)
-            aggiungiProdottiDiTest();
-
-            // pannello destinatario: ricarica per la struttura corrente
-            try{ loadRecipientPanelFields(); }catch(e){}
+        // cloud: auto-pull (silenzioso) prima di caricare i dati locali
+        try{ if (cloudCfg && cloudCfg.enabled && cloudCfg.autoPullOnStart) await cloudPullAll(true); }catch(e){}
+        // Auto-pull every 10 seconds (keeps multiple devices in sync)
+        try{
+          if (window.__cloudAutoPullTimer) clearInterval(window.__cloudAutoPullTimer);
+          window.__cloudAutoPullTimer = setInterval(async ()=>{
+            try{
+              if (!cloudCfg || !cloudCfg.enabled) return;
+              // if there are local changes not yet pushed, don't overwrite
+              if (cloudDirty) return;
+              await cloudPullAll(true);
+            }catch(_){}
+          }, 10000);
+          // Also pull when the tab becomes active again (mobile)
+          document.addEventListener('visibilitychange', async ()=>{
+            try{
+              if (document.visibilityState === 'visible' && cloudCfg && cloudCfg.enabled && !cloudDirty){
+                await cloudPullAll(true);
+              }
+            }catch(_){}
           });
+        }catch(e){}
 
+        // carica dati del centro e renderizza UI
+        caricaDati();
+        caricaReparti();
+        caricaSottoclassi();
+        caricaForzati();
+        caricaOrdini();
+        caricaConfigurazioneReparti();
+        caricaOrdiniRegistrati();
+
+        caricaTipiProdotti();
+        renderTipoNav();
+        aggiornaTipoSelect();
+        renderizza();
+        renderizzaReparti();
+        aggiornaSelectReparti();
+        aggiornaSottoclassiSelect();
+        aggiornaInterfacciaSottoclassi();
+
+        // prodotti test (se previsti)
+        aggiungiProdottiDiTest();
+
+        // pannello destinatario: ricarica per la struttura corrente
+        try{ loadRecipientPanelFields(); }catch(e){}
     }
 
 
@@ -11446,6 +11708,53 @@ window.handleRipristinoFile = function(ev) {
             <button class="btn-primary" onclick="salvaCentri()">Salva</button>
         </div>
     </div>
+</div>
+
+
+
+<!-- ===== CLOUD SYNC MODAL ===== -->
+<div class="modal-cloud-overlay no-print" id="modalCloud">
+  <div class="modal-cloud">
+    <div class="mc-head">
+      <div>
+        <div class="mc-title">☁️ Sincronizzazione Google Sheets</div>
+        <div class="mc-small">Sincronizza i dati della struttura corrente con il tuo Google Sheet via Apps Script.</div>
+      </div>
+      <button class="btn-secondary" onclick="chiudiModalCloud()">Chiudi</button>
+    </div>
+    <div class="mc-body">
+      <div class="mc-row" style="justify-content:space-between;">
+        <label style="margin:0;">Abilita sincronizzazione</label>
+        <label style="display:flex; align-items:center; gap:8px; font-weight:900; margin:0;">
+          <input id="cloudEnabled" type="checkbox" style="width:auto; transform:scale(1.2);">
+          Attiva
+        </label>
+      </div>
+
+      <label for="cloudUrl">URL Apps Script (web app)</label>
+      <input id="cloudUrl" type="text" value="https://script.google.com/macros/s/AKfycbyuyCEYw9nN_eOK7NT9UjZ5CjtW-cvGjB30DAKLhrYS2fOKmilPoyCOf32EO8T-EoKU/exec">
+
+      <label for="cloudToken">Token (opzionale)</label>
+      <input id="cloudToken" type="password" placeholder="Se lo usi nello script (consigliato), inseriscilo qui">
+
+      <div class="mc-row" style="margin-top:12px;">
+        <button class="btn" style="background:#111;color:#fff;" onclick="cloudPing()">Test connessione</button>
+        <button class="btn" style="background:#1976d2;color:#fff;" onclick="cloudScarica()">⬇️ Scarica dal cloud</button>
+        <button class="btn" style="background:#2e7d32;color:#fff;" onclick="cloudCarica()">⬆️ Carica sul cloud</button>
+      </div>
+
+      <div id="cloudInfo" class="mc-note" style="margin-top:12px;"></div>
+
+      <div class="mc-small" style="margin-top:12px;">
+        Nota: per evitare problemi CORS/preflight, l’app invia i dati in <b>POST</b> come testo. Se il tuo script non usa l’API indicata, trovi un esempio pronto in <code>apps-script/Code.gs</code> dentro lo ZIP che ti consegno.
+      </div>
+    </div>
+
+    <div class="mc-actions">
+      <button class="btn-secondary" onclick="cloudSalvaConfig()">Salva</button>
+      <button class="btn-primary" onclick="chiudiModalCloud()">OK</button>
+    </div>
+  </div>
 </div>
 
 
