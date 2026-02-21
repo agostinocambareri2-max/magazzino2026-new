@@ -2235,7 +2235,7 @@ let listaForzati = new Set();
             try { aggiornaInterfacciaSottoclassi && aggiornaInterfacciaSottoclassi(); } catch(e){}
 
             cloudDirty = false;
-            cloudUpdateIndicator('ok','Cloud: sincronizzato');
+            cloudUpdateIndicator('ok','Cloud: salvato ✓');
             cloudSetInfo(`<b>OK</b> — Dati scaricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
             try { localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPull: cloudNowISO(), labId })); } catch(e){}
         } catch(e) {
@@ -2264,7 +2264,7 @@ let listaForzati = new Set();
             if (!r || !r.ok) throw new Error((r&&r.error)||'set lab fallito');
 
             cloudDirty = false;
-            cloudUpdateIndicator('ok','Cloud: sincronizzato');
+            cloudUpdateIndicator('ok','Cloud: salvato ✓');
             if (!silent) cloudSetInfo(`<b>OK</b> — Dati caricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
             try { localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPush: cloudNowISO(), labId })); } catch(e){}
         } catch(e) {
@@ -2582,7 +2582,20 @@ let listaForzati = new Set();
         `).join('');
     }
 
-    function generaIdCentro() {
+    function slugifyCentroId_(s){
+        try{
+            return String(s||'')
+              .trim()
+              .toLowerCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // rimuove accenti
+              .replace(/[^a-z0-9]+/g,'-')
+              .replace(/^-+|-+$/g,'') || ('c' + Math.random().toString(36).slice(2,7));
+        }catch(e){
+            return 'c' + Math.random().toString(36).slice(2,7);
+        }
+    }
+
+function generaIdCentro() {
         // id breve univoco
         const base = 'c' + Math.random().toString(36).slice(2, 7);
         if (!labs.some(l => l.id === base)) return base;
@@ -3489,7 +3502,12 @@ window.accessCambiaPassword = function(){
 
         const pin = (prompt('PIN (opzionale) per questa struttura:') || '').trim();
 
-        const id = generaIdCentro();
+        // id stabile basato sul nome (così ogni struttura resta separata anche nel cloud)
+        const baseId = slugifyCentroId_(nome);
+        let id = baseId;
+        let n = 2;
+        while (labs.some(l => l.id === id)) { id = `${baseId}-${n++}`; }
+
         labs.push({ id, name: nome, pin: pin, kind: accessKind });
         salvaLabs();
 
