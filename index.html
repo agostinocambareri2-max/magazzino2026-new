@@ -8456,6 +8456,16 @@ let almenoUnProdottoAggiornato = false;
   </div>
 </div>
 
+
+<script>
+/* Safety: if initialization fails, don't leave the page blank */
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    try { document.body.classList.remove('app-preload'); } catch(e) {}
+  }, 300);
+});
+</script>
+
 </body>
             </html>
         `;
@@ -11725,6 +11735,16 @@ window.handleRipristinoFile = function(ev) {
 
   </div>
 </div>
+
+
+<script>
+/* Safety: if initialization fails, don't leave the page blank */
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    try { document.body.classList.remove('app-preload'); } catch(e) {}
+  }, 300);
+});
+</script>
 
 </body>
 </html>
