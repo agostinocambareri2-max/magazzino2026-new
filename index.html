@@ -1004,7 +1004,6 @@
 </head>
 
 <body class="app-preload">
-<script>(function(){try{document.body.classList.remove('app-preload');}catch(e){} setTimeout(function(){try{document.body.classList.remove('app-preload');}catch(e){}},50);})();</script>
 
 <div id="toast">Operazione completata!</div>
 <div class="header no-print">
@@ -1901,189 +1900,219 @@ let listaForzati = new Set();
         return `${baseKey}__${currentLabId}`;
     }
 
-    
-/* ==================== CLOUD SYNC (Google Sheets via Apps Script) ====================
-   Obiettivo:
-   - Dati condivisi per tutti i dispositivi (PC/telefono/colleghi)
-   - Aggiornamento automatico ogni 10 secondi
-   - NIENTE persistenza locale per i dati di magazzino (solo cache in memoria)
-   Nota: rimane localStorage solo per impostazioni di accesso/centri.
-*/
-const CLOUD_ENABLED = true;
-const CLOUD_POLL_MS = 10_000;
-const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
-
-// Chiavi che devono vivere SOLO su cloud (non persistono in locale)
-const CLOUD_KEYS = new Set([
-  STORAGE_KEY,
-  FORZATI_KEY,
-  REPARTI_KEY,
-  ORDINE_REPARTO_KEY,
-  SOTTOCLASSI_KEY,
-  CONFIG_REPARTI_KEY,
-  STRUTTURA_ORDINE_CFG_KEY,
-  ORDINI_REGISTRATI_KEY,
-  SUPPLIER_PROFILES_KEY,
-  'tipiProdotti',
-  REGISTRO_SCADUTI_KEY
-]);
-
-// Cache in memoria per il centro corrente (non persistente)
-let cloudKV = Object.create(null); // baseKey -> string
-let cloudLastRev = null;
-let cloudDirty = false;
-let cloudPushTimer = null;
-let cloudPollTimer = null;
-
-function cloudFetch_(action, params = {}, body = null) {
-  const url = new URL(GAS_WEBAPP_URL);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
-  const opt = body
-    ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }
-    : { method: 'GET' };
-  return fetch(url.toString(), opt).then(r => r.json());
-}
-
-function cloudGetKey_() {
-  // Scope fisso per il magazzino dei centri
-  const scope = 'lab';
-  const labId = String(currentLabId || '');
-  return { scope, labId };
-}
-
-async function cloudPull_(opts = { force:false }) {
-  if (!CLOUD_ENABLED) return;
-  if (!currentLabId) return;
-  if (cloudDirty && !opts.force) return; // non sovrascrivere mentre sto salvando modifiche locali
-
-  const { scope, labId } = cloudGetKey_();
-  const res = await cloudFetch_('get', { scope, labId });
-  if (!res || res.ok !== true) throw new Error((res && (res.error || res.message)) || 'cloud get failed');
-
-  const rec = res.record;
-  if (!rec || !rec.json) {
-    // nessun dato ancora salvato su cloud per questo centro
-    cloudKV = Object.create(null);
-    cloudLastRev = rec ? rec.rev : null;
-    return;
-  }
-
-  // Evita reload inutili se rev non cambia
-  if (cloudLastRev != null && rec.rev != null && Number(rec.rev) === Number(cloudLastRev) && !opts.force) {
-    return;
-  }
-
-  let parsed = null;
-  try { parsed = JSON.parse(rec.json); } catch(_) { parsed = null; }
-  if (parsed && parsed.kv && typeof parsed.kv === 'object') {
-    cloudKV = Object.assign(Object.create(null), parsed.kv);
-  } else if (parsed && typeof parsed === 'object') {
-    // compatibilita: se in passato hai salvato direttamente un oggetto
-    cloudKV = Object.assign(Object.create(null), parsed);
-  } else {
-    cloudKV = Object.create(null);
-  }
-  cloudLastRev = rec.rev;
-
-  // Applica al runtime (rilegge tutte le chiavi e ridisegna)
-  try {
-    caricaDati();
-    caricaReparti();
-    caricaSottoclassi();
-    caricaForzati();
-    caricaOrdini();
-    caricaConfigurazioneReparti();
-    caricaOrdiniRegistrati();
-    caricaTipiProdotti();
-    renderTipoNav();
-    aggiornaTipoSelect();
-    renderizza();
-  } catch(e) {
-    console.warn('cloud apply error', e);
-  }
-}
-
-async function cloudPush_() {
-  if (!CLOUD_ENABLED) return;
-  if (!currentLabId) return;
-
-  const { scope, labId } = cloudGetKey_();
-  const payload = { kv: cloudKV };
-  const res = await cloudFetch_('set', {}, { scope, labId, json: JSON.stringify(payload) });
-  if (!res || res.ok !== true) throw new Error((res && (res.error || res.message)) || 'cloud set failed');
-  cloudDirty = false;
-}
-
-function cloudSchedulePush_() {
-  if (!CLOUD_ENABLED) return;
-  cloudDirty = true;
-  if (cloudPushTimer) clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(async () => {
-    try {
-      await cloudPush_();
-      // dopo push, riallinea anche rev facendo un pull forzato leggero
-      try { await cloudPull_({force:true}); } catch(_){
-        // ignore
-      }
-    } catch(e) {
-      console.warn('cloud push error', e);
+    function lsGet(baseKey) {
+        return localStorage.getItem(getLabKey(baseKey));
     }
-  }, 600); // debounce
-}
-
-function cloudStartPolling_() {
-  if (!CLOUD_ENABLED) return;
-  if (cloudPollTimer) clearInterval(cloudPollTimer);
-  cloudPollTimer = setInterval(() => {
-    cloudPull_().catch(e => console.warn('cloud poll error', e));
-  }, CLOUD_POLL_MS);
-
-  // pull immediato quando torni sulla scheda/app
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      cloudPull_({force:true}).catch(e => console.warn('cloud vis pull error', e));
+    function lsSet(baseKey, value) {
+        localStorage.setItem(getLabKey(baseKey), value);
     }
-  });
-}
+    function lsRemove(baseKey) {
+        localStorage.removeItem(getLabKey(baseKey));
+    }
 
-function cloudResetForLab_() {
-  cloudKV = Object.create(null);
-  cloudLastRev = null;
-  cloudDirty = false;
-  if (cloudPushTimer) clearTimeout(cloudPushTimer);
-  cloudPushTimer = null;
-}
 
-/* ==================== STORAGE WRAPPERS ==================== */
-function lsGet(baseKey) {
-  const k = String(baseKey);
-  // Dati condivisi: prendili dalla cache cloud (in memoria)
-  if (CLOUD_ENABLED && CLOUD_KEYS.has(k)) {
-    return cloudKV[k] != null ? String(cloudKV[k]) : null;
-  }
-  // Impostazioni locali (centri/login) restano in localStorage
-  return localStorage.getItem(getLabKey(k));
-}
-function lsSet(baseKey, value) {
-  const k = String(baseKey);
-  const v = (value == null) ? '' : String(value);
-  if (CLOUD_ENABLED && CLOUD_KEYS.has(k)) {
-    cloudKV[k] = v;
-    cloudSchedulePush_();
-    return;
-  }
-  localStorage.setItem(getLabKey(k), v);
-}
-function lsRemove(baseKey) {
-  const k = String(baseKey);
-  if (CLOUD_ENABLED && CLOUD_KEYS.has(k)) {
-    delete cloudKV[k];
-    cloudSchedulePush_();
-    return;
-  }
-  localStorage.removeItem(getLabKey(k));
-}
+    // ==================== CLOUD SYNC (Google Sheets via Apps Script) ====================
+    // Obiettivo: dati condivisi NON persistenti in locale (niente localStorage per i dati del magazzino).
+    // Usiamo sessionStorage come cache temporanea e Google Sheets come sorgente unica.
+
+    const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
+    const CLOUD_SCOPE = 'lab';
+    const CLOUD_POLL_MS = 10000; // 10s
+
+    // Chiavi (baseKey) che fanno parte dei dati condivisi del magazzino
+    const CLOUD_SHARED_KEYS = new Set([
+        STORAGE_KEY,
+        FORZATI_KEY,
+        REPARTI_KEY,
+        ORDINE_REPARTO_KEY,
+        SOTTOCLASSI_KEY,
+        CONFIG_REPARTI_KEY,
+        SUPPLIER_PROFILES_KEY,
+        SUPPLIER_PROFILES_GLOBAL_KEY,
+        STRUTTURA_ORDINE_CFG_KEY,
+        ORDINI_REGISTRATI_KEY,
+        // cataloghi
+        (typeof CATALOG_KEY_LOCAL !== 'undefined' ? CATALOG_KEY_LOCAL : ''),
+        (typeof CATALOG_KEY_GLOBAL !== 'undefined' ? CATALOG_KEY_GLOBAL : '')
+    ].filter(Boolean));
+
+    const cloudState = {
+        enabled: true,
+        dirty: false,
+        pushing: false,
+        pulling: false,
+        lastRev: null,
+        pushTimer: null,
+        pollTimer: null
+    };
+
+    function cloudKeyFor(baseKey) {
+        // sessionStorage usa la stessa chiave lab-specific
+        return getLabKey(baseKey);
+    }
+
+    // Override storage per chiavi condivise: sessionStorage (non persistente) invece di localStorage
+    const _lsGet_original = lsGet;
+    const _lsSet_original = lsSet;
+    const _lsRemove_original = lsRemove;
+
+    lsGet = function(baseKey) {
+        if (CLOUD_SHARED_KEYS.has(baseKey)) {
+            return sessionStorage.getItem(cloudKeyFor(baseKey));
+        }
+        return _lsGet_original(baseKey);
+    };
+
+    lsSet = function(baseKey, value) {
+        if (CLOUD_SHARED_KEYS.has(baseKey)) {
+            sessionStorage.setItem(cloudKeyFor(baseKey), value);
+            cloudMarkDirty_();
+            return;
+        }
+        _lsSet_original(baseKey, value);
+    };
+
+    lsRemove = function(baseKey) {
+        if (CLOUD_SHARED_KEYS.has(baseKey)) {
+            sessionStorage.removeItem(cloudKeyFor(baseKey));
+            cloudMarkDirty_();
+            return;
+        }
+        _lsRemove_original(baseKey);
+    };
+
+    function cloudFetch_(action, payload) {
+        // text/plain evita preflight CORS
+        return fetch(GAS_WEBAPP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(Object.assign({ action }, payload || {}))
+        }).then(r => r.json());
+    }
+
+    function cloudLabId_() {
+        return String(currentLabId || '').trim();
+    }
+
+    function cloudMarkDirty_() {
+        cloudState.dirty = true;
+        // debounce push
+        if (cloudState.pushTimer) clearTimeout(cloudState.pushTimer);
+        cloudState.pushTimer = setTimeout(() => cloudPush_(false), 800);
+    }
+
+    function cloudSnapshotKV_() {
+        const kv = {};
+        for (const k of CLOUD_SHARED_KEYS) {
+            const v = sessionStorage.getItem(cloudKeyFor(k));
+            if (v != null) kv[k] = v;
+        }
+        return kv;
+    }
+
+    function cloudApplyKV_(kv) {
+        // Sovrascrive cache sessionStorage con dati dal cloud
+        for (const k of CLOUD_SHARED_KEYS) {
+            const ck = cloudKeyFor(k);
+            if (kv && Object.prototype.hasOwnProperty.call(kv, k)) {
+                sessionStorage.setItem(ck, kv[k]);
+            } else {
+                sessionStorage.removeItem(ck);
+            }
+        }
+    }
+
+    function cloudRefreshUI_() {
+        // Ricarica i dati dalle funzioni esistenti e ridisegna senza duplicare prodotti test
+        try {
+            caricaDati();
+            caricaReparti();
+            caricaSottoclassi();
+            caricaForzati();
+            caricaOrdini();
+            caricaConfigurazioneReparti();
+            caricaOrdiniRegistrati();
+
+            caricaTipiProdotti();
+            renderTipoNav();
+            aggiornaTipoSelect();
+            renderizza();
+            renderizzaReparti();
+            aggiornaSelectReparti();
+            aggiornaSottoclassiSelect();
+            aggiornaInterfacciaSottoclassi();
+        } catch(e) {
+            console.warn('cloudRefreshUI error', e);
+        }
+    }
+
+    async function cloudPull_(force=false) {
+        if (!cloudState.enabled) return;
+        const labId = cloudLabId_();
+        if (!labId) return;
+        if (cloudState.pulling) return;
+        if (cloudState.dirty && !force) return; // non sovrascrivere modifiche locali non ancora pushate
+
+        cloudState.pulling = true;
+        try {
+            const res = await cloudFetch_('get', { scope: CLOUD_SCOPE, labId });
+            if (res && res.ok) {
+                const rec = res.record;
+                if (rec && rec.json) {
+                    let parsed = null;
+                    try { parsed = JSON.parse(rec.json); } catch(_) { parsed = null; }
+                    if (parsed && parsed.kv) {
+                        // se rev cambia, applica
+                        if (cloudState.lastRev == null || String(rec.rev) !== String(cloudState.lastRev)) {
+                            cloudApplyKV_(parsed.kv);
+                            cloudState.lastRev = rec.rev;
+                            cloudState.dirty = false;
+                            cloudRefreshUI_();
+                        }
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn('cloudPull error', e);
+        } finally {
+            cloudState.pulling = false;
+        }
+    }
+
+    async function cloudPush_(force=false) {
+        if (!cloudState.enabled) return;
+        const labId = cloudLabId_();
+        if (!labId) return;
+        if (cloudState.pushing) return;
+        if (!cloudState.dirty && !force) return;
+
+        cloudState.pushing = true;
+        try {
+            const kv = cloudSnapshotKV_();
+            const payload = JSON.stringify({ kv, ts: new Date().toISOString() });
+            const res = await cloudFetch_('set', { scope: CLOUD_SCOPE, labId, json: payload });
+            if (res && res.ok) {
+                cloudState.dirty = false;
+            }
+        } catch(e) {
+            console.warn('cloudPush error', e);
+        } finally {
+            cloudState.pushing = false;
+        }
+    }
+
+    function cloudStart_() {
+        if (!cloudState.enabled) return;
+        // pull immediato e poi ogni 10s
+        if (cloudState.pollTimer) clearInterval(cloudState.pollTimer);
+        cloudPull_(true);
+        cloudState.pollTimer = setInterval(() => cloudPull_(false), CLOUD_POLL_MS);
+
+        // quando torni sulla scheda (telefono), pull immediato
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) cloudPull_(true);
+        });
+    }
 
 
     function caricaLabs() {
@@ -3460,17 +3489,21 @@ window.accessSalvaGestione = function(){
         mostraAccesso(false);
 });
 
-    
-function avviaAppPerCentro() {
+    function avviaAppPerCentro() {
         // sblocca UI dopo accesso (evita flash iniziale)
         try{ document.body.classList.remove('app-preload'); }catch(e){}
         // titolo in base alla struttura selezionata
         aggiornaTitoloMagazzino();
 
-        // === CLOUD: reset cache per centro, pull iniziale e avvio polling ===
-        try { cloudResetForLab_(); } catch(e){}
-        const startLocal = () => {
-            // carica dati del centro e renderizza UI (usa lsGet -> cloudKV)
+        // Avvia cloud sync per questo centro
+        try{ cloudStart_(); }catch(e){}
+
+        // Pull dal cloud prima di renderizzare (cosi tutti vedono gli stessi dati)
+        Promise.resolve()
+          .then(() => (typeof cloudPull_ === 'function' ? cloudPull_(true) : null))
+          .catch(()=>null)
+          .finally(() => {
+            // carica dati del centro e renderizza UI
             caricaDati();
             caricaReparti();
             caricaSottoclassi();
@@ -3478,23 +3511,24 @@ function avviaAppPerCentro() {
             caricaOrdini();
             caricaConfigurazioneReparti();
             caricaOrdiniRegistrati();
+
             caricaTipiProdotti();
             renderTipoNav();
             aggiornaTipoSelect();
             renderizza();
+            renderizzaReparti();
+            aggiornaSelectReparti();
+            aggiornaSottoclassiSelect();
+            aggiornaInterfacciaSottoclassi();
 
-            try { cloudStartPolling_(); } catch(e){}
-        };
+            // prodotti test (se previsti)
+            aggiungiProdottiDiTest();
 
-        if (CLOUD_ENABLED) {
-            cloudPull_({force:true})
-              .then(() => startLocal())
-              .catch((e) => { console.warn('cloud initial pull error', e); startLocal(); });
-        } else {
-            startLocal();
-        }
-}
+            // pannello destinatario: ricarica per la struttura corrente
+            try{ loadRecipientPanelFields(); }catch(e){}
+          });
 
+    }
 
 
     function hookOverlayCloseMultiLab() {
@@ -8457,16 +8491,6 @@ let almenoUnProdottoAggiornato = false;
   </div>
 </div>
 
-
-<script>
-/* Safety: if initialization fails, don't leave the page blank */
-window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    try { document.body.classList.remove('app-preload'); } catch(e) {}
-  }, 300);
-});
-</script>
-
 </body>
             </html>
         `;
@@ -11736,16 +11760,6 @@ window.handleRipristinoFile = function(ev) {
 
   </div>
 </div>
-
-
-<script>
-/* Safety: if initialization fails, don't leave the page blank */
-window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    try { document.body.classList.remove('app-preload'); } catch(e) {}
-  }, 300);
-});
-</script>
 
 </body>
 </html>
