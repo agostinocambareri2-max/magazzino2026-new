@@ -2072,7 +2072,7 @@ let listaForzati = new Set();
         try { state[LABS_KEY] = JSON.parse(localStorage.getItem(LABS_KEY) || '[]'); } catch(e){ state[LABS_KEY]=[]; }
         try { state[ACCESS_USERS_KEY] = JSON.parse(localStorage.getItem(ACCESS_USERS_KEY) || '{}'); } catch(e){ state[ACCESS_USERS_KEY]={}; }
         try { state[ACCESS_KIND_KEY] = localStorage.getItem(ACCESS_KIND_KEY) || 'LAB'; } catch(e){}
-        try { state[CURRENT_LAB_KEY] = localStorage.getItem(CURRENT_LAB_KEY) || ''; } catch(e){}
+        /* NON sincronizzare CURRENT_LAB_KEY: scelta locale del dispositivo */
         return state;
     }
 
@@ -2199,7 +2199,6 @@ let listaForzati = new Set();
                     if (parsed && parsed[LABS_KEY] !== undefined) map[LABS_KEY] = JSON.stringify(parsed[LABS_KEY]);
                     if (parsed && parsed[ACCESS_USERS_KEY] !== undefined) map[ACCESS_USERS_KEY] = JSON.stringify(parsed[ACCESS_USERS_KEY]);
                     if (parsed && parsed[ACCESS_KIND_KEY] !== undefined) map[ACCESS_KIND_KEY] = String(parsed[ACCESS_KIND_KEY]||'LAB');
-                    if (parsed && parsed[CURRENT_LAB_KEY] !== undefined) map[CURRENT_LAB_KEY] = String(parsed[CURRENT_LAB_KEY]||'');
                     cloudApplyStateKeys(map);
                 } catch(e){}
             }
