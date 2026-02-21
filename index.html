@@ -1079,11 +1079,7 @@
 </style>
 </head>
 
-<body>
-<script>
-  // Fail-safe: never keep the UI hidden (preload)
-  try { document.body.classList.remove('app-preload'); } catch(e) {}
-</script>
+<body class="app-preload">
 
 <div id="toast">Operazione completata!</div>
 <div class="header no-print">
@@ -1972,7 +1968,7 @@ let listaForzati = new Set();
     const ORDINI_REGISTRATI_KEY = 'magazzino_ordini_registrati_chc';
 
     // ==================== CLOUD SYNC (Google Apps Script) ====================
-    const CLOUD_CFG_KEY = 'magazzino_cloud_cfg_v1';
+    const CLOUD_CFG_KEY = 'magazzino_cloud_cfg_v2';
     const CLOUD_META_KEY = 'magazzino_cloud_meta_v1'; // meta globale (last push/pull)
     const GAS_WEBAPP_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
 
@@ -1993,15 +1989,6 @@ let listaForzati = new Set();
             cloudCfg = { enabled:true, url:GAS_WEBAPP_URL_DEFAULT, token:'', autoPullOnStart:true, autoPush:true };
         }
         if (!cloudCfg.url) cloudCfg.url = GAS_WEBAPP_URL_DEFAULT;
-        // FORZA sincronizzazione automatica (richiesta): sempre attiva, auto-pull e auto-push
-        try {
-            cloudCfg.enabled = true;
-            cloudCfg.autoPullOnStart = true;
-            cloudCfg.autoPush = true;
-            // se la URL salvata è vuota o era quella vecchia, usa la default aggiornata
-            if (!cloudCfg.url || cloudCfg.url === 'https://script.google.com/macros/s/AKfycbwZQWK3JKEX9V8UNbAqPuAUawkvt2oUAVSFWa00aFmVVnnPTEwzMM_l8rpObiFZ0Vyg/exec') cloudCfg.url = GAS_WEBAPP_URL_DEFAULT;
-        } catch(e) {}
-        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg||{})); cloudSuppressHooks = false; } catch(e) { try{ cloudSuppressHooks = false; }catch(_){} }
         // device id (per debug/conflitti)
         try {
             const k='magazzino_cloud_device_id_v1';
@@ -2016,7 +2003,7 @@ let listaForzati = new Set();
     }
 
     function cloudSaveCfg(){
-        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg||{})); cloudSuppressHooks = false; } catch(e) { try{ cloudSuppressHooks = false; }catch(_){} }
+        try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cloudCfg||{})); } catch(e){}
         cloudUpdateIndicator();
     }
 
@@ -2040,9 +2027,6 @@ let listaForzati = new Set();
 
     function cloudInterestingKey(k){
         if (!k) return false;
-        // escludi chiavi interne della sync (evita loop)
-        if (k === CLOUD_META_KEY) return false;
-        if (k === CLOUD_CFG_KEY) return false;
         // includi tutte le chiavi dell’app, escluse sessioni volatili
         if (k === ACCESS_SESSION_KEY) return false;
         if (typeof ADMIN_UNLOCK_KEY !== 'undefined' && k === ADMIN_UNLOCK_KEY) return false;
@@ -2253,7 +2237,7 @@ let listaForzati = new Set();
             cloudDirty = false;
             cloudUpdateIndicator('ok','Cloud: sincronizzato');
             cloudSetInfo(`<b>OK</b> — Dati scaricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
-            try { cloudSuppressHooks = true; localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPull: cloudNowISO(), labId })); } catch(e) {} finally { cloudSuppressHooks = false; }
+            try { localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPull: cloudNowISO(), labId })); } catch(e){}
         } catch(e) {
             cloudUpdateIndicator('err','Cloud: errore');
             cloudSetInfo(`<b>Errore scaricamento</b>: ${escapeHtml(String(e&&e.message||e))}`);
@@ -2282,7 +2266,7 @@ let listaForzati = new Set();
             cloudDirty = false;
             cloudUpdateIndicator('ok','Cloud: sincronizzato');
             if (!silent) cloudSetInfo(`<b>OK</b> — Dati caricati.<br><span style="color:#666">Struttura: </span><b>${escapeHtml(labId)}</b>`);
-            try { cloudSuppressHooks = true; localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPush: cloudNowISO(), labId })); } catch(e) {} finally { cloudSuppressHooks = false; }
+            try { localStorage.setItem(CLOUD_META_KEY, JSON.stringify({ lastPush: cloudNowISO(), labId })); } catch(e){}
         } catch(e) {
             cloudUpdateIndicator('err','Cloud: errore');
             if (!silent) cloudSetInfo(`<b>Errore caricamento</b>: ${escapeHtml(String(e&&e.message||e))}`);
@@ -3746,27 +3730,6 @@ window.accessSalvaGestione = function(){
 
         // cloud: auto-pull (silenzioso) prima di caricare i dati locali
         try{ if (cloudCfg && cloudCfg.enabled && cloudCfg.autoPullOnStart) await cloudPullAll(true); }catch(e){}
-        // Auto-pull every 10 seconds (keeps multiple devices in sync)
-        try{
-          if (window.__cloudAutoPullTimer) clearInterval(window.__cloudAutoPullTimer);
-          window.__cloudAutoPullTimer = setInterval(async ()=>{
-            try{
-              if (!cloudCfg || !cloudCfg.enabled) return;
-              // if there are local changes not yet pushed, don't overwrite
-              if (cloudDirty) return;
-              await cloudPullAll(true);
-            }catch(_){}
-          }, 10000);
-          // Also pull when the tab becomes active again (mobile)
-          document.addEventListener('visibilitychange', async ()=>{
-            try{
-              if (document.visibilityState === 'visible' && cloudCfg && cloudCfg.enabled && !cloudDirty){
-                await cloudPullAll(true);
-              }
-            }catch(_){}
-          });
-        }catch(e){}
-
         // carica dati del centro e renderizza UI
         caricaDati();
         caricaReparti();
@@ -11639,7 +11602,7 @@ window.handleRipristinoFile = function(ev) {
 
       <div id="accessPinBox" style="display:none;">
         <label for="accessCentroPin">PIN Struttura</label>
-        <input id="accessCentroPin" type="password" inputmode="numeric" placeholder="Inserisci PIN (se richiesto)">
+        <input id="accessCentroPin" type="password" inputmode="numeric" placeholder="Inserisci PIN (se richiesto)" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
         <div class="hint">Se non richiesto, lascia vuoto.</div>
         <div class="error" id="accessErrorStep2">PIN non corretto.</div>
       </div>
@@ -11658,7 +11621,7 @@ window.handleRipristinoFile = function(ev) {
 
       <div id="accessPassArea" style="display:none;">
         <label for="accessUserPass">Password</label>
-        <input id="accessUserPass" type="password" placeholder="Password">
+        <input id="accessUserPass" type="password" placeholder="Password" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
         <div class="error" id="accessError">Password non corretta.</div>
         <div class="row" style="justify-content:space-between;">
           <button id="btnAccessChangePass" class="btn-secondary" onclick="accessCambiaPassword()" style="display:none;">Cambia password</button>
@@ -11687,7 +11650,7 @@ window.handleRipristinoFile = function(ev) {
         </div>
         <div class="row">
             <label for="labLoginPin">PIN Centro</label>
-            <input id="labLoginPin" type="password" inputmode="numeric" placeholder="Inserisci PIN (se richiesto)">
+            <input id="labLoginPin" type="password" inputmode="numeric" placeholder="Inserisci PIN (se richiesto)" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
             <div class="hint">Se il centro non ha PIN, lascia vuoto.</div>
         </div>
         <div class="error" id="labLoginError">PIN non corretto.</div>
@@ -11732,10 +11695,10 @@ window.handleRipristinoFile = function(ev) {
       </div>
 
       <label for="cloudUrl">URL Apps Script (web app)</label>
-      <input id="cloudUrl" type="text" value="https://script.google.com/macros/s/AKfycbyuyCEYw9nN_eOK7NT9UjZ5CjtW-cvGjB30DAKLhrYS2fOKmilPoyCOf32EO8T-EoKU/exec">
+      <input id="cloudUrl" type="text" value="https://script.google.com/macros/s/AKfycbwZQWK3JKEX9V8UNbAqPuAUawkvt2oUAVSFWa00aFmVVnnPTEwzMM_l8rpObiFZ0Vyg/exec">
 
       <label for="cloudToken">Token (opzionale)</label>
-      <input id="cloudToken" type="password" placeholder="Se lo usi nello script (consigliato), inseriscilo qui">
+      <input id="cloudToken" type="password" placeholder="Se lo usi nello script (consigliato), inseriscilo qui" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
 
       <div class="mc-row" style="margin-top:12px;">
         <button class="btn" style="background:#111;color:#fff;" onclick="cloudPing()">Test connessione</button>
@@ -11764,15 +11727,15 @@ window.handleRipristinoFile = function(ev) {
     <h2>🔑 Cambia password</h2>
     <div class="row">
       <label for="cpOld">Vecchia password</label>
-      <input id="cpOld" type="password" placeholder="Inserisci la vecchia password">
+      <input id="cpOld" type="password" placeholder="Inserisci la vecchia password" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
     </div>
     <div class="row">
       <label for="cpNew1">Nuova password</label>
-      <input id="cpNew1" type="password" placeholder="Inserisci la nuova password">
+      <input id="cpNew1" type="password" placeholder="Inserisci la nuova password" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
     </div>
     <div class="row">
       <label for="cpNew2">Ripeti nuova password</label>
-      <input id="cpNew2" type="password" placeholder="Ripeti la nuova password">
+      <input id="cpNew2" type="password" placeholder="Ripeti la nuova password" autocomplete="new-password" autocomplete=\"new-password\" data-lpignore=\"true\" data-1p-ignore=\"true\">
       <div class="error" id="cpErr" style="display:none;">Errore</div>
       <div class="hint">La password verrà aggiornata solo per il tuo utente in questa struttura.</div>
     </div>
