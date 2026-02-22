@@ -2129,24 +2129,67 @@ let listaForzati = new Set();
         }
     }
 
-    async function cloudFetchJson(url, opts){
-        const res = await fetch(url, opts||{});
-        const txt = await res.text();
-        try { return JSON.parse(txt); } catch(e) { return { ok:false, error:'Risposta non JSON', raw: txt }; }
-    }
+    // --- Cloud transport ---
+// POST usa fetch (text/plain) e non richiede CORS preflight.
+async function cloudFetchJson(url, opts){
+    const res = await fetch(url, opts||{});
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch(e) { return { ok:false, error:'Risposta non JSON', raw: txt }; }
+}
 
-    function cloudUrlBase(){
-        const u = (cloudCfg && cloudCfg.url) ? cloudCfg.url : GAS_WEBAPP_URL_DEFAULT;
-        return (u||'').trim();
-    }
+// GET usa JSONP (no CORS) tramite parametro "callback" supportato da Apps Script.
+function cloudJsonp(params){
+    const base = cloudUrlBase();
+    if (!base) return Promise.resolve({ ok:false, error:'URL mancante' });
 
-    async function cloudCallGet(params){
-        const base = cloudUrlBase();
-        if (!base) return { ok:false, error:'URL mancante' };
-        const qs = new URLSearchParams(params||{}).toString();
+    return new Promise((resolve) => {
+        const cbName = "__cloud_cb_" + Math.random().toString(36).slice(2);
+        const timeoutMs = 12000;
+        let done = false;
+
+        function cleanup(){
+            if (done) return;
+            done = true;
+            try { delete window[cbName]; } catch(e){ window[cbName] = undefined; }
+            if (script && script.parentNode) script.parentNode.removeChild(script);
+            if (timer) clearTimeout(timer);
+        }
+
+        window[cbName] = (data) => {
+            cleanup();
+            resolve(data);
+        };
+
+        const qs = new URLSearchParams(Object.assign({}, params||{}, { callback: cbName })).toString();
         const url = qs ? `${base}?${qs}` : base;
-        return await cloudFetchJson(url, { method:'GET', cache:'no-store' });
-    }
+
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = url;
+        script.onerror = () => {
+            cleanup();
+            resolve({ ok:false, error:'Errore rete/JSONP' });
+        };
+
+        const timer = setTimeout(() => {
+            cleanup();
+            resolve({ ok:false, error:'Timeout JSONP' });
+        }, timeoutMs);
+
+        document.head.appendChild(script);
+    });
+}
+
+function cloudUrlBase(){
+    const u = (cloudCfg && cloudCfg.url) ? cloudCfg.url : GAS_WEBAPP_URL_DEFAULT;
+    return (u||'').trim();
+}
+
+async function cloudCallGet(params){
+    // JSONP (no CORS)
+    return await cloudJsonp(params||{});
+}
+
 
     async function cloudCallPost(payload){
         const base = cloudUrlBase();
