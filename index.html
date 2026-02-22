@@ -2304,6 +2304,15 @@ async function cloudCallGet(params){
         if (!silent) cloudSetInfo('Caricamento dati in corso…');
 
         try {
+            // Force persist of in-memory data to localStorage before snapshot/upload
+            try { if (typeof salvaDati === 'function') salvaDati(); } catch(e) {}
+            try { if (typeof salvaReparti === 'function') salvaReparti(); } catch(e) {}
+            try { if (typeof salvaSottoclassi === 'function') salvaSottoclassi(); } catch(e) {}
+            try { if (typeof salvaForzati === 'function') salvaForzati(); } catch(e) {}
+            try { if (typeof salvaConfigurazioneReparti === 'function') salvaConfigurazioneReparti(); } catch(e) {}
+            try { if (typeof salvaOrdiniRegistrati === 'function') salvaOrdiniRegistrati(); } catch(e) {}
+            try { if (typeof salvaTipiProdotti === 'function') salvaTipiProdotti(); } catch(e) {}
+
             const globalState = cloudBuildGlobalState();
             const labState = cloudBuildLabState(labId);
 
