@@ -2091,13 +2091,41 @@ let listaForzati = new Set();
             'tipiProdotti'
         ];
         const out = { __labId: labId, __capturedAt: cloudNowISO(), __deviceId: cloudDeviceId, keys: {} };
-        // copia chiavi lab-specific
+        // copia chiavi lab-specific (preferisci lo stato in memoria per evitare problemi di quota LocalStorage)
         baseKeys.forEach(k => {
+            const kk = `${k}__${labId}`;
             try {
-                const kk = `${k}__${labId}`;
-                const v = localStorage.getItem(kk);
+                let v = null;
+
+                // Snapshot completo dallo stato in memoria (piu affidabile del LocalStorage per grandi dataset)
+                if (k === STORAGE_KEY && typeof dati !== 'undefined') {
+                    v = JSON.stringify(dati);
+                } else if (k === FORZATI_KEY && typeof listaForzati !== 'undefined') {
+                    v = JSON.stringify(Array.from(listaForzati));
+                } else if (k === REPARTI_KEY && typeof reparti !== 'undefined') {
+                    v = JSON.stringify(reparti);
+                } else if (k === ORDINE_REPARTO_KEY && typeof ordineRepartoProdotti !== 'undefined') {
+                    v = JSON.stringify(Array.from(ordineRepartoProdotti));
+                } else if (k === SOTTOCLASSI_KEY && typeof sottoclassi !== 'undefined') {
+                    v = JSON.stringify(sottoclassi);
+                } else if (k === CONFIG_REPARTI_KEY && typeof configurazioneReparti !== 'undefined') {
+                    v = JSON.stringify(configurazioneReparti);
+                } else if (k === ORDINI_REGISTRATI_KEY && typeof ordiniRegistrati !== 'undefined') {
+                    v = JSON.stringify(ordiniRegistrati);
+                } else if (k === 'tipiProdotti' && typeof tipiProdotti !== 'undefined') {
+                    v = JSON.stringify(tipiProdotti);
+                } else {
+                    // fallback: prendi dal LocalStorage se esiste
+                    v = localStorage.getItem(kk);
+                }
+
                 if (v != null) out.keys[kk] = v;
-            } catch(e){}
+            } catch (e) {
+                try {
+                    const vv = localStorage.getItem(kk);
+                    if (vv != null) out.keys[kk] = vv;
+                } catch(_){}
+            }
         });
         // contatori ordine per anno (lab-specific)
         try {
@@ -2304,15 +2332,6 @@ async function cloudCallGet(params){
         if (!silent) cloudSetInfo('Caricamento dati in corso…');
 
         try {
-            // Force persist of in-memory data to localStorage before snapshot/upload
-            try { if (typeof salvaDati === 'function') salvaDati(); } catch(e) {}
-            try { if (typeof salvaReparti === 'function') salvaReparti(); } catch(e) {}
-            try { if (typeof salvaSottoclassi === 'function') salvaSottoclassi(); } catch(e) {}
-            try { if (typeof salvaForzati === 'function') salvaForzati(); } catch(e) {}
-            try { if (typeof salvaConfigurazioneReparti === 'function') salvaConfigurazioneReparti(); } catch(e) {}
-            try { if (typeof salvaOrdiniRegistrati === 'function') salvaOrdiniRegistrati(); } catch(e) {}
-            try { if (typeof salvaTipiProdotti === 'function') salvaTipiProdotti(); } catch(e) {}
-
             const globalState = cloudBuildGlobalState();
             const labState = cloudBuildLabState(labId);
 
@@ -2398,7 +2417,18 @@ async function cloudCallGet(params){
         return localStorage.getItem(getLabKey(baseKey));
     }
     function lsSet(baseKey, value) {
-        localStorage.setItem(getLabKey(baseKey), value);
+        try {
+            localStorage.setItem(getLabKey(baseKey), value);
+            window.__lsQuotaError = false;
+        } catch (e) {
+            // QuotaExceededError: non bloccare l'app. I dati verranno comunque salvati su Cloud.
+            window.__lsQuotaError = true;
+            console.warn('LocalStorage quota/errore su', baseKey, e);
+        }
+        // Forza la sync cloud anche se LocalStorage non riesce a salvare (quota)
+        try {
+            if (typeof cloudOnLocalChange === 'function' && !cloudSuppressHooks) cloudOnLocalChange();
+        } catch(_){}
     }
     function lsRemove(baseKey) {
         localStorage.removeItem(getLabKey(baseKey));
