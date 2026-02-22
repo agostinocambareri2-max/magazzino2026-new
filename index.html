@@ -1967,7 +1967,81 @@ let listaForzati = new Set();
     const STRUTTURA_ORDINE_CFG_KEY = 'magazzino_struttura_ordine_cfg_chc';
     const ORDINI_REGISTRATI_KEY = 'magazzino_ordini_registrati_chc';
 
-    // ==================== CLOUD SYNC (Google Apps Script) ====================
+    
+    // ==================== STORAGE MODE: CLOUD-ONLY (session) ====================
+    // Per evitare problemi di quota LocalStorage e garantire che la sorgente sia il cloud,
+    // i dati del magazzino vengono salvati SOLO in sessionStorage (durano finché la scheda è aperta).
+    // Le preferenze (cloud cfg, ecc.) restano in localStorage.
+    (function(){
+        try{
+            const SESSION_PREFIXES = [
+                'magazzino_reagenti_', 'magazzino_reagenti_forzati_', 'magazzino_ordine_reparto_',
+                'magazzino_config_reparti_', 'magazzino_sottoclassi_', 'magazzino_supplier_profiles_',
+                'magazzino_struttura_ordine_cfg_', 'magazzino_ordini_registrati_', 'tipiProdotti__'
+            ];
+            const SESSION_CONTAINS = [
+                '__centro-', '__c1', '__c2' // lasciamo ampia compatibilità; la logica sotto copre anche __<labId>
+            ];
+
+            const shouldSession = (k) => {
+                if(!k) return false;
+                // chiavi "grossa" del magazzino: meglio session
+                for(const p of SESSION_PREFIXES){ if(k.startsWith(p)) return true; }
+                // tutte le chiavi per-lab con separatore "__" (es: ...__centro-1)
+                if(k.includes('__')) {
+                    // ma NON vogliamo spostare la cloud cfg o meta
+                    if(k.startsWith('magazzino_cloud_')) return false;
+                    if(k.startsWith('magazzino_labs_')) return false;
+                    return true;
+                }
+                for(const c of SESSION_CONTAINS){ if(k.includes(c)) return true; }
+                return false;
+            };
+
+            const _get = localStorage.getItem.bind(localStorage);
+            const _set = localStorage.setItem.bind(localStorage);
+            const _rem = localStorage.removeItem.bind(localStorage);
+
+            localStorage.getItem = function(k){
+                try{
+                    if(shouldSession(k)){
+                        const v = sessionStorage.getItem(k);
+                        return v !== null ? v : null;
+                    }
+                }catch(_){}
+                return _get(k);
+            };
+
+            localStorage.setItem = function(k,v){
+                try{
+                    if(shouldSession(k)){
+                        sessionStorage.setItem(k, String(v));
+                        return;
+                    }
+                }catch(_){}
+                // fallback a localStorage (preferenze / config)
+                _set(k, String(v));
+            };
+
+            localStorage.removeItem = function(k){
+                try{
+                    if(shouldSession(k)){
+                        sessionStorage.removeItem(k);
+                        return;
+                    }
+                }catch(_){}
+                _rem(k);
+            };
+
+            // pulizia automatica sessione quando si chiude la scheda
+            window.addEventListener('beforeunload', () => {
+                try { sessionStorage.clear(); } catch(_){}
+            });
+        }catch(_){}
+    })();
+    // ==================== /STORAGE MODE: CLOUD-ONLY (session) ====================
+
+// ==================== CLOUD SYNC (Google Apps Script) ====================
     const CLOUD_CFG_KEY = 'magazzino_cloud_cfg_v2';
     const CLOUD_META_KEY = 'magazzino_cloud_meta_v1'; // meta globale (last push/pull)
     const GAS_WEBAPP_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxNuukxIjBtR-1-Ud3Pa7eXn0X3LjbOP71HVNzozk_gaKux0lrmvQxAJy9eZvHlWjM6uw/exec';
@@ -2095,7 +2169,7 @@ let listaForzati = new Set();
         baseKeys.forEach(k => {
             try {
                 const kk = `${k}__${labId}`;
-                const v = (sessionStorage.getItem(kk) ?? localStorage.getItem(kk));
+                const v = localStorage.getItem(kk);
                 if (v != null) out.keys[kk] = v;
             } catch(e){}
         });
@@ -2120,19 +2194,11 @@ let listaForzati = new Set();
             Object.keys(map).forEach(k => {
                 try {
                     const v = map[k];
-                    const isLabKey = (k.indexOf('__') > -1);
-                    const base = (isLabKey ? k.split('__')[0] : k);
-                    const useSession = isLabKey && (String(base||'').startsWith('magazzino_') || String(base||'') === 'tipiProdotti');
-                    if (v === null || v === undefined) {
-                        if (useSession) sessionStorage.removeItem(k);
-                        else localStorage.removeItem(k);
-                    } else {
-                        if (useSession) sessionStorage.setItem(k, v);
-                        else localStorage.setItem(k, v);
-                    }
+                    if (v === null || v === undefined) localStorage.removeItem(k);
+                    else localStorage.setItem(k, v);
                 } catch(e){}
             });
-} finally {
+        } finally {
             cloudSuppressHooks = false;
         }
     }
@@ -2263,13 +2329,6 @@ async function cloudCallGet(params){
             }
 
             // 2) lab
-            // cloud-only: pulisci cache di sessione (dati magazzino) prima di applicare i dati del nuovo centro
-            try {
-                Object.keys(sessionStorage).forEach(k=>{
-                    if (k.indexOf('__')>-1) sessionStorage.removeItem(k);
-                    else if (String(k||'').startsWith('magazzino_')) sessionStorage.removeItem(k);
-                });
-            } catch(e){}
             const r = await cloudCallGet({ action:'get', scope:'lab', labId: labId, token:(cloudCfg.token||'') });
             if (r && r.ok && r.record && r.record.json) {
                 const parsed = (typeof r.record.json === 'string') ? JSON.parse(r.record.json) : r.record.json;
@@ -2400,32 +2459,14 @@ async function cloudCallGet(params){
         return `${baseKey}__${currentLabId}`;
     }
 
-    function isCloudOnlyLabKey_(baseKey){
-        try {
-            return (String(baseKey||'').startsWith('magazzino_') || String(baseKey||'') === 'tipiProdotti');
-        } catch(e){ return false; }
-    }
-
     function lsGet(baseKey) {
-        const k = getLabKey(baseKey);
-        try {
-            if (isCloudOnlyLabKey_(baseKey)) return sessionStorage.getItem(k);
-        } catch(e){}
-        return localStorage.getItem(k);
+        return localStorage.getItem(getLabKey(baseKey));
     }
     function lsSet(baseKey, value) {
-        const k = getLabKey(baseKey);
-        try {
-            if (isCloudOnlyLabKey_(baseKey)) { sessionStorage.setItem(k, value); return; }
-        } catch(e){}
-        localStorage.setItem(k, value);
+        localStorage.setItem(getLabKey(baseKey), value);
     }
     function lsRemove(baseKey) {
-        const k = getLabKey(baseKey);
-        try {
-            if (isCloudOnlyLabKey_(baseKey)) { sessionStorage.removeItem(k); return; }
-        } catch(e){}
-        localStorage.removeItem(k);
+        localStorage.removeItem(getLabKey(baseKey));
     }
 
     function caricaLabs() {
