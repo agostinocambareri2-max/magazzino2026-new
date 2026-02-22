@@ -2132,10 +2132,18 @@ let listaForzati = new Set();
     // --- Cloud transport ---
 // POST usa fetch (text/plain) e non richiede CORS preflight.
 async function cloudFetchJson(url, opts){
-    const res = await fetch(url, opts||{});
-    const txt = await res.text();
-    try { return JSON.parse(txt); } catch(e) { return { ok:false, error:'Risposta non JSON', raw: txt }; }
+    // NO-CORS sender: invia i dati al Web App senza leggere la risposta (evita CORS).
+    // Con Apps Script, la richiesta arriva comunque al server; il browser blocca solo la lettura della risposta.
+    const o = Object.assign({}, (opts||{}));
+    o.method = o.method || 'POST';
+    o.mode = 'no-cors';
+    o.cache = 'no-store';
+    // header "simple" consentito in no-cors
+    o.headers = Object.assign({'Content-Type':'text/plain;charset=UTF-8'}, (o.headers||{}));
+    await fetch(url, o);
+    return { ok:true, note:'sent-no-cors' };
 }
+
 
 // GET usa JSONP (no CORS) tramite parametro "callback" supportato da Apps Script.
 function cloudJsonp(params){
