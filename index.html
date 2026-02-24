@@ -2111,24 +2111,125 @@ let listaForzati = new Set();
         return false;
     }
 
-    function cloudHookLocalStorage(){
-        try {
-            const _set = localStorage.setItem.bind(localStorage);
-            const _rem = localStorage.removeItem.bind(localStorage);
-            localStorage.setItem = function(k,v){
-                _set(k,v);
-                try {
-                    if (!cloudSuppressHooks && cloudCfg && cloudCfg.enabled && cloudInterestingKey(k)) cloudOnLocalChange();
-                } catch(e){}
-            };
-            localStorage.removeItem = function(k){
-                _rem(k);
-                try {
-                    if (!cloudSuppressHooks && cloudCfg && cloudCfg.enabled && cloudInterestingKey(k)) cloudOnLocalChange();
-                } catch(e){}
-            };
-        } catch(e){}
+// --- CLOUD-ONLY + separazione per Struttura ---
+// Salviamo i dati "magazzino_*" in sessionStorage (evita quota 5MB) e li separiamo per Struttura
+// traducendo:  magazzino_xxx  ->  magazzino_xxx__<labId>
+// I dati veri stanno su Google Sheets tramite Apps Script (Carica/Scarica).
+
+const ORIGINAL_LOCALSTORAGE = window.localStorage; // riferimento al vero localStorage (non toccare)
+
+function cloudGetActiveLabId_(){
+  try{
+    const v = ORIGINAL_LOCALSTORAGE.getItem('magazzino_current_lab_chc');
+    return (v && String(v).trim()) ? String(v).trim() : 'c1';
+  }catch(_){
+    return 'c1';
+  }
+}
+
+const CLOUD_GLOBAL_KEYS_ = new Set([
+  // lista strutture (comune)
+  'magazzino_labs_chc',
+  // configurazione cloud (comune)
+  'MAGAZZINO_CLOUD_URL',
+  'MAGAZZINO_CLOUD_TOKEN'
+]);
+
+function cloudTranslateKey_(k){
+  if(!k) return k;
+  const key = String(k);
+  if(key.includes('__')) return key;                 // già per-lab
+  if(!key.startsWith('magazzino_')) return key;      // non è un dato di magazzino
+  if(CLOUD_GLOBAL_KEYS_.has(key)) return key;        // globale
+  const labId = cloudGetActiveLabId_();
+  return key + '__' + labId;
+}
+
+
+    
+function cloudHookLocalStorage(){
+  if(window.__cloud_ls_hooked) return;
+  window.__cloud_ls_hooked = true;
+
+  const _get = ORIGINAL_LOCALSTORAGE.getItem.bind(ORIGINAL_LOCALSTORAGE);
+  const _set = ORIGINAL_LOCALSTORAGE.setItem.bind(ORIGINAL_LOCALSTORAGE);
+  const _rem = ORIGINAL_LOCALSTORAGE.removeItem.bind(ORIGINAL_LOCALSTORAGE);
+  const _key = ORIGINAL_LOCALSTORAGE.key.bind(ORIGINAL_LOCALSTORAGE);
+  const _clr = ORIGINAL_LOCALSTORAGE.clear.bind(ORIGINAL_LOCALSTORAGE);
+
+  // Store "sicuro" per i dati grossi: sessionStorage (evita quota localStorage)
+  const S = window.sessionStorage;
+
+  function isCloudKey(k){ return cloudInterestingKey(k); }
+
+  function mergedKeys_(){
+    const keys = [];
+    // real localStorage
+    for(let i=0;i<ORIGINAL_LOCALSTORAGE.length;i++){
+      const k = _key(i);
+      if(k!=null) keys.push(String(k));
     }
+    // sessionStorage (solo chiavi cloud)
+    for(let i=0;i<S.length;i++){
+      const k = S.key(i);
+      if(k && isCloudKey(k) && !keys.includes(k)) keys.push(k);
+    }
+    return keys;
+  }
+
+  Object.defineProperty(window.localStorage,'length',{
+    configurable:true,
+    get(){ return mergedKeys_().length; }
+  });
+
+  window.localStorage.key = function(i){
+    const ks = mergedKeys_();
+    return (i>=0 && i<ks.length) ? ks[i] : null;
+  };
+
+  window.localStorage.getItem = function(k){
+    const kk = cloudTranslateKey_(k);
+    if(isCloudKey(kk)){
+      const v = S.getItem(kk);
+      if(v!=null) return v;
+      return _get(kk);
+    }
+    return _get(kk);
+  };
+
+  window.localStorage.setItem = function(k,v){
+    const kk = cloudTranslateKey_(k);
+    const vv = String(v);
+    if(isCloudKey(kk)){
+      S.setItem(kk, vv);
+      cloudOnLocalChange();
+      return;
+    }
+    _set(kk, vv);
+  };
+
+  window.localStorage.removeItem = function(k){
+    const kk = cloudTranslateKey_(k);
+    if(isCloudKey(kk)){
+      S.removeItem(kk);
+      cloudOnLocalChange();
+      return;
+    }
+    _rem(kk);
+  };
+
+  window.localStorage.clear = function(){
+    _clr();
+    const toDel = [];
+    for(let i=0;i<S.length;i++){
+      const k = S.key(i);
+      if(k && isCloudKey(k)) toDel.push(k);
+    }
+    toDel.forEach(k=>S.removeItem(k));
+    cloudOnLocalChange();
+  };
+}
+
 
     function cloudOnLocalChange(){
         cloudDirty = true;
