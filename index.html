@@ -2117,6 +2117,40 @@ let listaForzati = new Set();
 // I dati veri stanno su Google Sheets tramite Apps Script (Carica/Scarica).
 
 const ORIGINAL_LOCALSTORAGE = window.localStorage; // riferimento al vero localStorage (non toccare)
+const ORIGINAL_SESSIONSTORAGE = window.sessionStorage;
+
+// Router storage: chiavi con '__' (dati per-centro) vanno in sessionStorage per evitare limite 5MB.
+// Chiavi globali (config, lista centri, centro selezionato) restano nel vero localStorage.
+(function(){
+  try{
+    const router = {
+      get length(){ return ORIGINAL_LOCALSTORAGE.length + ORIGINAL_SESSIONSTORAGE.length; },
+      key(i){ return ORIGINAL_LOCALSTORAGE.key(i) || ORIGINAL_SESSIONSTORAGE.key(i-ORIGINAL_LOCALSTORAGE.length); },
+      getItem(k){
+        const key = String(k);
+        const store = key.includes('__') ? ORIGINAL_SESSIONSTORAGE : ORIGINAL_LOCALSTORAGE;
+        return store.getItem(key);
+      },
+      setItem(k,v){
+        const key = String(k);
+        const store = key.includes('__') ? ORIGINAL_SESSIONSTORAGE : ORIGINAL_LOCALSTORAGE;
+        return store.setItem(key, String(v));
+      },
+      removeItem(k){
+        const key = String(k);
+        const store = key.includes('__') ? ORIGINAL_SESSIONSTORAGE : ORIGINAL_LOCALSTORAGE;
+        return store.removeItem(key);
+      },
+      clear(){
+        // NON cancellare globali di default: puliamo solo sessionStorage (dati centro)
+        try{ ORIGINAL_SESSIONSTORAGE.clear(); }catch(e){}
+      }
+    };
+    // Sovrascrivi localStorage con router
+    Object.defineProperty(window, 'localStorage', { value: router, configurable: true });
+  }catch(e){}
+})();
+
 
 function cloudGetActiveLabId_(){
   try{
@@ -10941,7 +10975,7 @@ function renderCatalogo(){
         return;
     }
 
-    const rows = arr.slice(0, 300).map(it => {
+    const rows = arr.slice(0, 2000).map(it => {
         const sup = it.supplier ? `<span class="catalog-pill">${escapeHtml(it.supplier)}</span>` : '';
         const scopePill = (it.__scope === 'GLOBAL') ? `<span class="catalog-pill" style="background:#eee;color:#333;">Globale</span>` : '';
         const code = it.code ? `<div style="font-size:12px;color:#444;"><strong>${escapeHtml(it.code)}</strong></div>` : '';
